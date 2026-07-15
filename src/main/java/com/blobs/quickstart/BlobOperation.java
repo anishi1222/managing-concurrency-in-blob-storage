@@ -1,5 +1,10 @@
 package com.blobs.quickstart;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.nio.charset.StandardCharsets;
+
 import com.azure.core.http.rest.Response;
 import com.azure.core.util.Context;
 import com.azure.storage.blob.BlobClient;
@@ -11,15 +16,11 @@ import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import com.azure.storage.blob.specialized.BlobLeaseClient;
 import com.azure.storage.blob.specialized.BlobLeaseClientBuilder;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.nio.charset.StandardCharsets;
-
 public class BlobOperation {
     final String CONNECTION_STRING="CONNECTION_STRING";
     final String CONTAINER="BLOB_CONTAINER";
     BlobClient blobClient;
+    private BlobLeaseClient blobLeaseClient;
 
     public BlobOperation(){
         blobClient = new BlobClientBuilder()
@@ -27,6 +28,15 @@ public class BlobOperation {
                 .containerName(CONTAINER)
                 .blobName("test1")
                 .buildClient();
+    }
+
+    BlobOperation(BlobClient blobClient) {
+        this(blobClient, null);
+    }
+
+    BlobOperation(BlobClient blobClient, BlobLeaseClient blobLeaseClient) {
+        this.blobClient = blobClient;
+        this.blobLeaseClient = blobLeaseClient;
     }
 
     // Optimistic
@@ -81,7 +91,9 @@ public class BlobOperation {
     // Pessimistic
     void pessimistic() {
 
-        BlobLeaseClient blobLeaseClient = new BlobLeaseClientBuilder().blobClient(blobClient).buildClient();
+        BlobLeaseClient leaseClient = blobLeaseClient == null
+            ? new BlobLeaseClientBuilder().blobClient(blobClient).buildClient()
+            : blobLeaseClient;
         try {
             // 1st
             String blobContents1 = "First update. Overwrite blob if it exists.";
@@ -95,7 +107,7 @@ public class BlobOperation {
             System.out.println("ETag: " + blobItemResponse.getValue().getETag());
 
             // Leaseを取得
-            String leaseId = blobLeaseClient.acquireLease(15);
+            String leaseId = leaseClient.acquireLease(15);
             System.out.println("LeaseId: " + leaseId);
 
             // 2nd Lease IDを取得しているので成功するはず
@@ -132,7 +144,7 @@ public class BlobOperation {
             }
         }
         finally {
-            blobLeaseClient.releaseLease();
+            leaseClient.releaseLease();
         }
     }
 }
